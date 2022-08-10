@@ -7,22 +7,15 @@
 #include <Adafruit_SSD1306.h>
 #include <Fonts/FreeSerif9pt7b.h>
 
-
-#define LED 2
-#define RELAY 17
-
 #define SCREEN_WIDTH 128
 #define SCREEN_HEIGHT 64
 #define OLED_RESET -1 //TODO: define again when MM cable arrives
 
-#define SOUND_SPEED 0.034
-#define CM_TO_INCH 0.393701
+#define POWER_PIN 17
+#define SIGNAL_PIN 36
 
-const int trigPin = 5;
-const int echoPin = 18;
+int waterValue = 0;
 
-long duration;
-float ultrasonicDistance;
 
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 
@@ -30,92 +23,22 @@ Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 String user_html = "";
 
 
-
-
 char*               ssid_pfix = (char*)"iothome";
 unsigned long       lastPublishMillis = 0;
 
-char *ledon = "on";
-char *ledoff = "off";
-char *ledonoff;
-
-char *relayon = "on";
-char *relayoff = "off";
-char *relayonoff;
-
 const char *displaytext = "Ready";
-
-void ledstate(){
-    if(digitalRead(LED) == 1){
-        ledonoff = ledon;
-    }
-    else{
-        ledonoff = ledoff;
-    }
-}
-
-void relayloop() {
-    if(digitalRead(RELAY) == 1) {
-        relayonoff = relayon;
-    } else {
-        relayonoff = relayoff;
-    }
-    
-}
-
-void ultrasonicloop() {
-
-    digitalWrite(trigPin, LOW);
-    delayMicroseconds(2);
-
-    digitalWrite(trigPin, HIGH);
-    delayMicroseconds(10);
-    digitalWrite(trigPin, LOW);
-
-    duration = pulseIn(echoPin, HIGH);
-
-    ultrasonicDistance = duration * SOUND_SPEED/2;
-
-    // Serial.print("Distance: ");
-    // Serial.print(ultrasonicDistance);
-    // Serial.println(" cm");
-
-    //delay(5000);
-    delay(100);
-
-}
-
-// void cleardisplay(JsonDocument* root) {
-
-//     JsonObject d = (*root)["d"];
-
-//     if(d.containsKey("DISP")) {
-//         if(strcmp(d["DISP", "clearclearclear"])) {
-
-//             display.clearDisplay();
-
-//             d["DISP"] = "";
-
-//         }
-//     } 
-// }
-
 
 
 void publishData() {
     StaticJsonDocument<512> root;
     JsonObject data = root.createNestedObject("d");
 
-    
-    data["LED"] = ledonoff;
-    data["RELAY"] = relayonoff;
+
     data["DISP"];
-    data["ULTRASONIC"] = ultrasonicDistance;
-    
+    data["WATER"] = waterValue;
 
     serializeJson(root, msgBuffer);
     client.publish(publishTopic, msgBuffer);
-
 
 }
 
@@ -123,61 +46,6 @@ void handleUserCommand(JsonDocument* root) {
     JsonObject d = (*root)["d"];
 
     // YOUR CODE for command handling
-    
-     if(d.containsKey("LED")) {
-        if (strcmp(d["LED"], "off")) {
-            digitalWrite(LED,HIGH);
-            
-            Serial.println("LED on");
-        } 
-        else {
-            digitalWrite(LED,LOW);
-            
-            Serial.println("LED off");
-        }
-    }
-
-    if(d.containsKey("RELAY")) {
-        if (strcmp(d["RELAY"], "off")) {
-            digitalWrite(RELAY, HIGH);
-
-            Serial.println("RELAY on");
-        } else {
-            digitalWrite(RELAY, LOW);
-
-            Serial.println("RELAY off");
-        }
-    }
-
-    if(d.containsKey("DISP")) {
-
-        if (strcmp(d["DISP"], "clearclearclear")) {
-
-            displaytext = d["DISP"].as<char*>();
-            String dispText = (String) displaytext;
-
-            display.clearDisplay();
-
-            display.setTextSize(1);
-            display.setTextColor(WHITE);
-            display.setCursor(0,10);
-            display.println(dispText);
-            display.display();
-            Serial.println(dispText);
-
-        } else {
-
-            d["DISP"] = "";
-
-            display.clearDisplay();
-            display.display();
-
-            Serial.println("Cleared");
-
-        }
-
-    }
-
 
 }
 
@@ -212,7 +80,6 @@ void displaySetup() {
     delay(3000);
 
     display.clearDisplay();
-
     display.setTextSize(1);
     display.setTextColor(WHITE);
     display.setCursor(0,10);
@@ -221,26 +88,40 @@ void displaySetup() {
 
 }
 
-void ultrasonicSetup() {
+void waterSetup() {
 
-    pinMode(trigPin, OUTPUT);
-    pinMode(echoPin, INPUT);
-
+    pinMode(POWER_PIN, OUTPUT);
+    digitalWrite(POWER_PIN, LOW);
 }
+
+void waterLoop() {
+    digitalWrite(POWER_PIN, HIGH);
+    delay(10);
+    waterValue = analogRead(SIGNAL_PIN);
+    digitalWrite(POWER_PIN, LOW);
+
+    Serial.print("The water sensor value: ");
+    Serial.println(waterValue);
+
+    display.clearDisplay();
+    display.setTextSize(1);
+    display.setTextColor(WHITE);
+    display.setCursor(0,10);
+    display.print("The water sensor value: ");
+    display.println(waterValue);
+    display.display();
+
+    delay(1000);
+}
+
 
 void setup() {
     Serial.begin(115200);
     initDevice();
-    
-    pinMode(LED,OUTPUT);
-    pinMode(RELAY,OUTPUT);
-
-    digitalWrite(LED,LOW);
-    digitalWrite(RELAY,LOW);
 
     displaySetup();
 
-    ultrasonicSetup();
+    waterSetup();
 
     yield();
     JsonObject meta = cfg["meta"];
@@ -280,9 +161,7 @@ void loop() {
         lastPublishMillis = millis();
         yield();
     }
-    ledstate();
-    relayloop();
-    ultrasonicloop();
-    // cleardisplay();
+
+    waterLoop();
 
 }
